@@ -21,3 +21,6 @@
 # Sublime project
 *.sublime-project
 *.sublime-workspace
+
+# FS files
+*.dat

@@ -21,3 +21,6 @@ clean:
 	rm -f obj/*.o
 	rm -f obj/shell/*.o
 	rm -f *.bin
+
+fs.dat:
+	dd if=/dev/zero of=fs.dat bs=512 count=200

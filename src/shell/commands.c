@@ -49,7 +49,6 @@ COMMAND commands[] = {
 };
 
 
-int valid_argument(char *caller, char *arg);
 
 /* Look up NAME as the name of a command, and return a pointer to that
    command.  Return a NULL pointer if NAME isn't a command name. */
@@ -104,21 +103,34 @@ char *command_generator(const char *text, int state)
 }
 
 
-
+/* Forward declarations. */
+int valid_argument(char *caller, char *arg);
 
 int com_mount(char *arg)
 {
     if (!valid_argument("mount", arg))
         return 1;
-    printf("mount command\n");
+    if (mount(arg) == STATUS_ERR)
+    {
+        fprintf(stderr, "mount error\n");
+    } else {
+        printf("mount success\n");
+    }
+
     return 0;
 }
 
-int com_umount(char *arg)
+int com_umount(char *ignore)
 {
-    if (!valid_argument("unmount", arg))
-        return 1;
-    printf("unmount command\n");
+    int status = umount();
+    if (status == STATUS_NOT_MOUNT)
+    {
+        fprintf(stderr, "mount first\n");
+    } else if (status == STATUS_ERR) {
+        fprintf(stderr, "umount error\n");
+    } else {
+        printf("umount success\n");
+    }
     return 0;
 }
 

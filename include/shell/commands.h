@@ -7,5 +7,5 @@ typedef struct {
 COMMAND *find_command(char *name);
 char *command_generator(const char *text, int state);
 
-#define EXIT_CODE 3
+#define EXIT_CODE -1
 
