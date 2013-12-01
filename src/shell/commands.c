@@ -13,6 +13,7 @@
 
 int com_mount(char *arg);
 int com_umount(char *arg);
+int com_mkfs(char *arg);
 int com_stat(char *arg);
 int com_list(char *arg);
 int com_pwd(char *arg);
@@ -26,8 +27,10 @@ int com_link(char *arg);
 int com_unlink(char *arg);
 int com_read(char *arg);
 int com_write(char *arg);
+int com_dump_stats(char *arg);
 
 COMMAND commands[] = {
+    { "mkfs", com_mkfs, "Create file system in file" },
     { "mount", com_mount, "Mount file system" },
     { "umount", com_umount, "Umount file system" },
     { "stat", com_stat, "Get info about descriptor spec. by ID" },
@@ -44,7 +47,8 @@ COMMAND commands[] = {
     { "unlink", com_unlink, "Destroy link LINK" },
     { "pwd", com_pwd, "Print the current working directory" },
     { "tranc", com_tranc, "Change FILE size to SIZE" },
-    { "quit", com_quit, "Quit using Fileman" },
+    { "dump", com_dump_stats, "Print file system stats" },
+    { "quit", com_quit, "Quit shell" },
     { (char *)NULL, (Function *)NULL, (char *)NULL }
 };
 
@@ -110,28 +114,38 @@ int com_mount(char *arg)
 {
     if (!valid_argument("mount", arg))
         return 1;
-    if (mount(arg) == STATUS_ERR)
+    if (mount(arg))
     {
         fprintf(stderr, "mount error\n");
+        return STATUS_ERR;
     } else {
         printf("mount success\n");
+        return STATUS_OK;
     }
-
-    return 0;
 }
 
 int com_umount(char *ignore)
 {
-    int status = umount();
-    if (status == STATUS_NOT_MOUNT)
+    int err = umount();
+    if (err)
     {
-        fprintf(stderr, "mount first\n");
-    } else if (status == STATUS_ERR) {
-        fprintf(stderr, "umount error\n");
+        fprintf(stderr, "umount failed\n");
+        return STATUS_ERR;
     } else {
         printf("umount success\n");
+        return STATUS_OK;
     }
-    return 0;
+}
+
+int com_mkfs(char *path)
+{
+    int err = mkfs(path);
+    if (err)
+    {
+        fprintf(stderr, "Failed\n");
+        return STATUS_ERR;
+    }
+    return STATUS_OK;
 }
 
 int com_stat(char *arg)
@@ -139,7 +153,7 @@ int com_stat(char *arg)
     if (!valid_argument("stat", arg))
         return 1;
     printf("stat command\n");
-    return 0;
+    return STATUS_OK;
 }
 
 int com_list(char *arg)
@@ -147,7 +161,7 @@ int com_list(char *arg)
     if (!arg)
         arg = "";
     printf("list command\n");
-    return 0;
+    return STATUS_OK;
 }
 
 int com_create(char *arg)
@@ -155,7 +169,7 @@ int com_create(char *arg)
     if (!valid_argument("create", arg))
         return 1;
     printf("create command\n");
-    return 0;
+    return STATUS_OK;
 }
 
 int com_open(char *arg)
@@ -163,7 +177,7 @@ int com_open(char *arg)
     if (!valid_argument("open", arg))
         return 1;
     printf("open command\n");
-    return 0;
+    return STATUS_OK;
 }
 
 int com_close(char *arg)
@@ -171,7 +185,7 @@ int com_close(char *arg)
     if (!valid_argument("close", arg))
         return 1;
     printf("close command\n");
-    return 0;
+    return STATUS_OK;
 }
 
 int com_read(char *arg)
@@ -179,7 +193,7 @@ int com_read(char *arg)
     if (!valid_argument("read", arg))
         return 1;
     printf("read command\n");
-    return 0;
+    return STATUS_OK;
 }
 
 int com_write(char *arg)
@@ -187,7 +201,7 @@ int com_write(char *arg)
     if (!valid_argument("write", arg))
         return 1;
     printf("write command\n");
-    return 0;
+    return STATUS_OK;
 }
 
 int com_link(char *arg)
@@ -195,7 +209,7 @@ int com_link(char *arg)
     if (!valid_argument("link", arg))
         return 1;
     printf("link command\n");
-    return 0;
+    return STATUS_OK;
 }
 
 int com_unlink(char *arg)
@@ -203,7 +217,7 @@ int com_unlink(char *arg)
     if (!valid_argument("unlink", arg))
         return 1;
     printf("unlink command\n");
-    return 0;
+    return STATUS_OK;
 }
 
 int com_tranc(char *arg)
@@ -211,7 +225,7 @@ int com_tranc(char *arg)
     if (!valid_argument("tranc", arg))
         return 1;
     printf("tranc command\n");
-    return 0;
+    return STATUS_OK;
 }
 
 /* Print out help for ARG, or for all of the commands if ARG is not present. */
@@ -249,20 +263,25 @@ int com_help(char *arg)
         if (printed)
             printf("\n");
     }
-    return 0;
+    return STATUS_OK;
 }
 
 /* Print out the current working directory. */
 int com_pwd(char *ignore)
 {
     printf("/");
-    return 0;
+    return STATUS_OK;
 }
 
 /* The user wishes to quit using this program. Just set DONE non-zero. */
 int com_quit(char *arg)
 {
     return EXIT_CODE;
+}
+
+int com_dump_stats(char *ignore)
+{
+    return dump_stats();
 }
 
 /* Return non-zero if ARG is a valid argument for CALLER, else print

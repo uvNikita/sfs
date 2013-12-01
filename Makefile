@@ -22,5 +22,6 @@ clean:
 	rm -f obj/shell/*.o
 	rm -f *.bin
 
+.PHONY: fs.dat
 fs.dat:
-	dd if=/dev/zero of=fs.dat bs=512 count=200
+	dd if=/dev/zero of=fs.dat bs=512 count=${COUNT}

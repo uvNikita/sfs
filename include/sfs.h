@@ -4,3 +4,5 @@
 
 int mount(char *path);
 int umount();
+int dump_stats();
+int mkfs(char *path);

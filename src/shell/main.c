@@ -8,6 +8,7 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
+#include "sfs.h"
 #include "shell/commands.h"
 #include "shell/core.h"
 
@@ -26,7 +27,7 @@ int main(int argc, char **argv)
     /* Loop reading and executing lines until the user quits. */
     while(done == 0)
     {
-        char *line = readline("# ");
+        char *line = readline("sfs: ");
 
         if (!line)
             break;
@@ -74,7 +75,7 @@ int execute_line(char *line)
     if (!command)
     {
         fprintf(stderr, "%s: No such command.\n", com_word);
-        return (-1);
+        return STATUS_ERR;
     }
 
     /* Get argument to command, if any. */
