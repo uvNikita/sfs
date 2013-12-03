@@ -6,6 +6,8 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <math.h>
+#include <string.h>
+
 #include "sfs.h"
 
 #define BLOCK_SIZE 512
@@ -16,12 +18,19 @@
 
 #define MASK ((uint8_t *) (char *)FS + FS->mask_offset)
 #define DESCR_TABLE ((descr_struct *) ((char *)FS + FS->descr_table_offset))
+#define BLOCKS(ID) ((void *)((char *)FS + ID * FS->block_size))
+
+#define SPACE_LEFT(descr) (ceil((float) descr->size / FS->block_size) * FS->block_size - descr->size)
+#define BLOCKS_NUM(descr) ((int) ceil((float) descr->size / FS->block_size))
+#define FILES_IN_BLOCK (FS->block_size / sizeof(file_struct))
+#define FILES_NUM(descr) (descr->size / sizeof(file_struct))
 
 typedef struct {
+    int id;
     int type;
     int links_num;
-    int blocks_num;
-    char *blocks;
+    int size;
+    int blocks_id;
 } descr_struct;
 
 typedef struct {
@@ -33,6 +42,11 @@ typedef struct {
     int max_files;
     int descr_table_offset;
 } fs_struct;
+
+typedef struct {
+    char filename[20];
+    int descr_id;
+} file_struct;
 
 fs_struct *FS = NULL;
 
@@ -136,6 +150,111 @@ bool check_block(int num)
     return MASK[i] & (1 << (num % 8));
 }
 
+descr_struct *find_descr()
+{
+    for (int i = 0; i < FS->max_files; ++i)
+    {
+        descr_struct *descr = DESCR_TABLE + i;
+        if (descr->type == 0)
+            return descr;
+    }
+    return NULL;
+}
+
+int find_block()
+{
+    for (int i = 0; i < FS->blocks_num; ++i)
+    {
+        if(!check_block(i))
+            return i;
+    }
+    return -1;
+}
+
+char *get_filename(char *path)
+{
+
+    int last_delim = -1;
+
+    for (int i = 0; i < strlen(path); ++i)
+    {
+        if (path[i] == '/')
+            last_delim = i;
+    }
+    char *filename = path + last_delim + 1;
+    return filename;
+}
+
+char *get_dir_path(char *path)
+{
+    int last_delim = -1;
+
+    for (int i = 0; i < strlen(path); ++i)
+    {
+        if (path[i] == '/')
+            last_delim = i;
+    }
+    char *dir_path = malloc(last_delim + 1);
+    strncpy(dir_path, path, last_delim);
+    dir_path[last_delim] = '\0';
+    return dir_path;
+}
+
+descr_struct *lookup(char *path)
+{
+    // TODO: implement searching descriptor by path
+    return DESCR_TABLE + 0;
+}
+
+int add_file(descr_struct *dir, descr_struct *file, char *filename)
+{
+    int left = SPACE_LEFT(dir);
+    file_struct *new_file;
+    int *blocks = BLOCKS(dir->blocks_id);
+    if (left >= sizeof(file_struct))
+    {
+        int block_id = blocks[BLOCKS_NUM(dir) - 1];
+        new_file = (file_struct *)((char *) BLOCKS(block_id) + FS->block_size - left);
+    } else {
+        int new_block_id = find_block();
+        if (new_block_id == -1)
+            return STATUS_NO_SPACE_LEFT;
+        mask_block(new_block_id);
+        blocks[BLOCKS_NUM(dir)] = new_block_id;
+        dir->size += left;
+        new_file = BLOCKS(new_block_id);
+    }
+    dir->size += sizeof(file_struct);
+    strcpy(new_file->filename, filename);
+    new_file->descr_id = file->id;
+    return STATUS_OK;
+}
+
+int list(char *path)
+{
+    int err = check_mount();
+    if (err)
+        return err;
+
+    descr_struct *dir = lookup(path);
+    int *blocks = BLOCKS(dir->blocks_id);
+    file_struct *files = BLOCKS(blocks[0]);
+    int bf_id = 0;
+    int block_id = 0;
+    for (int f_id = 0; f_id < FILES_NUM(dir); ++f_id)
+    {
+        printf("%s\n", files[bf_id].filename);
+        bf_id++;
+        if (bf_id == FILES_IN_BLOCK)
+        {
+            bf_id = 0;
+            block_id++;
+            files = BLOCKS(blocks[block_id]);
+        }
+    }
+    return STATUS_OK;
+}
+
 int mkfs(char *path)
 {
     int err = map_fs(path);
@@ -187,16 +306,60 @@ int mkfs(char *path)
         mask_block(i);
     }
 
+    // create root dir
+    descr_struct *root = DESCR_TABLE + 0;
+    root->id = 0;
+    root->type = DIR_TYPE;
+    root->links_num = 1;
+    root->size = 0;
+    int block_num = find_block();
+    if (block_num == -1)
+    {
+        umap_fs();
+        return STATUS_NO_SPACE_LEFT;
+    }
+    mask_block(block_num);
+    root->blocks_id = block_num;
+
     // all files are free
-    for (int i = 0; i < FS->max_files; ++i)
+    for (int i = 1; i < FS->max_files; ++i)
     {
         descr_struct *descr = DESCR_TABLE + i;
+        descr->id = i;
         descr->type = 0;
         descr->links_num = 0;
-        descr->blocks_num = 0;
-        descr->blocks = NULL;
+        descr->size = 0;
+        descr->blocks_id = 0;
     }
 
     dump_stats();
     return umap_fs();
+}
+
+int create_file(char *path)
+{
+    int err = check_mount();
+    if (err)
+        return err;
+    descr_struct *file = find_descr();
+    if (file == NULL)
+        return STATUS_MAX_FILES_REACHED;
+
+    int block_num = find_block();
+    mask_block(block_num);
+
+    if (block_num == -1)
+        return STATUS_NO_SPACE_LEFT;
+
+    file->type = FILE_TYPE;
+    file->links_num = 1;
+    file->size = 0;
+    file->blocks_id = block_num;
+
+    char *filename = get_filename(path);
+    char *dir_path = get_dir_path(path);
+    descr_struct *dir = lookup(dir_path);
+    free(dir_path);
+
+    return add_file(dir, file, filename);
 }

@@ -156,20 +156,25 @@ int com_stat(char *arg)
     return STATUS_OK;
 }
 
-int com_list(char *arg)
+int com_list(char *path)
 {
-    if (!arg)
-        arg = "";
-    printf("list command\n");
-    return STATUS_OK;
+    if (!path)
+        path = "/";
+    return list(path);
 }
 
-int com_create(char *arg)
+int com_create(char *path)
 {
-    if (!valid_argument("create", arg))
+    if (!valid_argument("create", path))
         return 1;
-    printf("create command\n");
-    return STATUS_OK;
+    int err = create_file(path);
+    if (err == STATUS_NO_SPACE_LEFT)
+    {
+        fprintf(stderr, "No space left on device\n");
+        return err;
+    } else {
+        return STATUS_OK;
+    }
 }
 
 int com_open(char *arg)
