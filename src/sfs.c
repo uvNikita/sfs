@@ -23,7 +23,7 @@
 #define SPACE_LEFT(descr) (ceil((float) descr->size / FS->block_size) * FS->block_size - descr->size)
 #define BLOCKS_NUM(descr) ((int) ceil((float) descr->size / FS->block_size))
 #define FILES_IN_BLOCK (FS->block_size / sizeof(file_struct))
-#define FILES_NUM(descr) (descr->size / sizeof(file_struct))
+#define FILES_NUM(descr) ((int) (descr->size / sizeof(file_struct)))
 
 typedef struct {
     int id;
@@ -194,6 +194,9 @@ char *get_dir_path(char *path)
         if (path[i] == '/')
             last_delim = i;
     }
+    // for root case
+    if (last_delim == 0)
+        last_delim = 1;
     char *dir_path = malloc(last_delim + 1);
     strncpy(dir_path, path, last_delim);
     dir_path[last_delim] = '\0';
@@ -203,7 +206,39 @@ char *get_dir_path(char *path)
 descr_struct *lookup(char *path)
 {
     // TODO: implement searching descriptor by path
-    return DESCR_TABLE + 0;
+    if (strcmp(path, "/") == 0)
+    {
+        return DESCR_TABLE + 0;
+    }
+    char *filename = get_filename(path);
+    char *dir_path = get_dir_path(path);
+    descr_struct *dir = lookup(dir_path);
+    free(dir_path);
+    if (dir == NULL)
+    {
+        return NULL;
+    }
+    int *blocks = BLOCKS(dir->blocks_id);
+    file_struct *files = BLOCKS(blocks[0]);
+    int bf_id = 0;
+    int block_id = 0;
+    for (int f_id = 0; f_id < FILES_NUM(dir); ++f_id)
+    {
+        file_struct *file = files + bf_id;
+        if(strcmp(file->filename, filename) == 0)
+        {
+            return DESCR_TABLE + file->descr_id;
+        }
+        bf_id++;
+        if (bf_id == FILES_IN_BLOCK)
+        {
+            bf_id = 0;
+            block_id++;
+            files = BLOCKS(blocks[block_id]);
+        }
+    }
+    return NULL;
+
 }
 
 int add_file(descr_struct *dir, descr_struct *file, char *filename)
@@ -243,7 +278,7 @@ int list(char *path)
     int block_id = 0;
     for (int f_id = 0; f_id < FILES_NUM(dir); ++f_id)
     {
-        printf("%s\n", files[bf_id].filename);
+        printf("%s\tid:%d\n", files[bf_id].filename, files[bf_id].descr_id);
         bf_id++;
         if (bf_id == FILES_IN_BLOCK)
         {
@@ -341,6 +376,10 @@ int create_file(char *path)
     int err = check_mount();
     if (err)
         return err;
+    if (lookup(path) != NULL)
+    {
+        return STATUS_EXISTS_ERR;
+    }
     descr_struct *file = find_descr();
     if (file == NULL)
         return STATUS_MAX_FILES_REACHED;
@@ -362,4 +401,46 @@ int create_file(char *path)
     free(dir_path);
 
     return add_file(dir, file, filename);
+}
+
+
+int filestat(int descr_id)
+{
+    int err = check_mount();
+    if (err)
+        return err;
+    descr_struct *descr = NULL;
+    for (int i = 0; i < FS->max_files; ++i)
+    {
+        descr_struct *descr_ = DESCR_TABLE + i;
+        if (descr_->id == descr_id)
+        {
+            descr = descr_;
+            break;
+        }
+    }
+    if (descr == NULL || descr->type == 0)
+    {
+        return STATUS_NOT_FOUND;
+    }
+
+    char *type;
+    if (descr->type == FILE_TYPE)
+    {
+        type = "file";
+    } else if (descr->type == DIR_TYPE) {
+        type = "dir";
+    } else if (descr->type == LINK_TYPE){
+        type = "link";
+    }
+    printf("Descriptor #%d\n", descr->id);
+    printf("type: %s\n", type);
+    printf("size: %d\n", descr->size);
+    printf("links num: %d\n", descr->links_num);
+    printf("blocks num: %d\n", BLOCKS_NUM(descr));
+    if (descr->type == DIR_TYPE)
+    {
+        printf("files num: %d\n", FILES_NUM(descr));
+    }
+    return STATUS_OK;
 }

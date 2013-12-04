@@ -109,6 +109,7 @@ char *command_generator(const char *text, int state)
 
 /* Forward declarations. */
 int valid_argument(char *caller, char *arg);
+int valid_path(char *path);
 
 int com_mount(char *arg)
 {
@@ -148,30 +149,46 @@ int com_mkfs(char *path)
     return STATUS_OK;
 }
 
-int com_stat(char *arg)
+int com_stat(char *descr_id)
 {
-    if (!valid_argument("stat", arg))
+    if (!valid_argument("stat", descr_id))
         return 1;
-    printf("stat command\n");
-    return STATUS_OK;
+    int err = filestat(atoi(descr_id));
+    if (err == STATUS_NOT_FOUND)
+    {
+        fprintf(stderr, "No such descriptor: %s\n", descr_id);
+        return STATUS_ERR;
+    } else if (err == STATUS_OK) {
+        return STATUS_OK;
+    } else {
+        fprintf(stderr, "Error occured\n");
+        return STATUS_ERR;
+    }
 }
 
 int com_list(char *path)
 {
-    if (!path)
+    if (path == NULL || (strcmp(path, "") == 0))
         path = "/";
+    if (!valid_path(path))
+        return STATUS_ERR;
     return list(path);
 }
 
 int com_create(char *path)
 {
     if (!valid_argument("create", path))
-        return 1;
+        return STATUS_ERR;
+    if (!valid_path(path))
+        return STATUS_ERR;
     int err = create_file(path);
     if (err == STATUS_NO_SPACE_LEFT)
     {
         fprintf(stderr, "No space left on device\n");
-        return err;
+        return STATUS_ERR;
+    } else if (err == STATUS_EXISTS_ERR) {
+        fprintf(stderr, "File already exists\n");
+        return STATUS_ERR;
     } else {
         return STATUS_OK;
     }
@@ -296,6 +313,17 @@ int valid_argument(char *caller, char *arg)
     if (!arg || !*arg)
     {
         fprintf(stderr, "%s: Argument required.\n", caller);
+        return 0;
+    }
+
+    return 1;
+}
+
+int valid_path(char *path)
+{
+    if (!path || path[0] != '/')
+    {
+        fprintf(stderr, "Only absolute path is supported\n");
         return 0;
     }
 
