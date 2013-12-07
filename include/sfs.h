@@ -13,3 +13,5 @@ int mkfs(char *path);
 int create_file(char *path);
 int list(char *path);
 int filestat(int descr_id);
+int mklink(char *from, char *to);
+int rmlink(char *path);

@@ -15,6 +15,7 @@
 #define DIR_TYPE 1
 #define FILE_TYPE 2
 #define LINK_TYPE 3
+#define FILENAME_SIZE 20
 
 #define MASK ((uint8_t *) (char *)FS + FS->mask_offset)
 #define DESCR_TABLE ((descr_struct *) ((char *)FS + FS->descr_table_offset))
@@ -44,7 +45,7 @@ typedef struct {
 } fs_struct;
 
 typedef struct {
-    char filename[20];
+    char filename[FILENAME_SIZE];
     int descr_id;
 } file_struct;
 
@@ -215,9 +216,7 @@ descr_struct *lookup(char *path)
     descr_struct *dir = lookup(dir_path);
     free(dir_path);
     if (dir == NULL)
-    {
         return NULL;
-    }
     int *blocks = BLOCKS(dir->blocks_id);
     file_struct *files = BLOCKS(blocks[0]);
     int bf_id = 0;
@@ -262,6 +261,71 @@ int add_file(descr_struct *dir, descr_struct *file, char *filename)
     dir->size += sizeof(file_struct);
     strcpy(new_file->filename, filename);
     new_file->descr_id = file->id;
+    return STATUS_OK;
+}
+
+int rm_file(descr_struct *dir, char *filename)
+{
+    int *blocks = BLOCKS(dir->blocks_id);
+    file_struct *files = BLOCKS(blocks[0]);
+    int bf_id = 0;
+    int block_id = 0;
+    file_struct *del_file;
+    for (int f_id = 0; f_id < FILES_NUM(dir); ++f_id)
+    {
+        if (strcmp(files[bf_id].filename, filename) == 0)
+        {
+            del_file = files + bf_id;
+            break;
+        }
+        bf_id++;
+        if (bf_id == FILES_IN_BLOCK)
+        {
+            bf_id = 0;
+            block_id++;
+            files = BLOCKS(blocks[block_id]);
+        }
+    }
+    if (del_file == NULL)
+        return STATUS_NOT_FOUND;
+    int last_block_id = blocks[BLOCKS_NUM(dir) - 1];
+    int last_file_id = FILES_NUM(dir) % FILES_IN_BLOCK - 1;
+    file_struct *last_file = (file_struct *) BLOCKS(last_block_id) + last_file_id;
+
+    // copy last file on the place of deleted file
+    strncpy(del_file->filename, last_file->filename, FILENAME_SIZE);
+    del_file->descr_id = last_file->descr_id;
+
+    strncpy(last_file->filename, "", FILENAME_SIZE);
+    last_file->descr_id = 0;
+
+    int old_blocks_num = BLOCKS_NUM(dir);
+    dir->size -= sizeof(file_struct);
+    if (old_blocks_num - BLOCKS_NUM(dir) != 0)
+    {
+        blocks[last_block_id] = 0;
+        umask_block(last_block_id);
+    }
+
+    // If it was last file in dir
+    if (dir->size == 0)
+    {
+        strncpy(del_file->filename, "", FILENAME_SIZE);
+        del_file->descr_id = 0;
+        umask_block(blocks[0]);
+        blocks[0] = 0;
+        return STATUS_OK;
+    }
+    return STATUS_OK;
+}
+
+int rm_file_descr(descr_struct *descr)
+{
+    umask_block(descr->blocks_id);
+    descr->type = 0;
+    descr->size = 0;
+    descr->blocks_id = 0;
+    descr->links_num = 0;
     return STATUS_OK;
 }
 
@@ -442,5 +506,46 @@ int filestat(int descr_id)
     {
         printf("files num: %d\n", FILES_NUM(descr));
     }
+    return STATUS_OK;
+}
+
+int mklink(char *from, char *to)
+{
+    descr_struct *from_file = lookup(from);
+    if (from_file == NULL)
+        return STATUS_NOT_FOUND;
+    char *dir_path = get_dir_path(to);
+    char *filename = get_filename(to);
+    descr_struct *to_dir = lookup(dir_path);
+    if (to_dir == NULL)
+        return STATUS_NOT_FOUND;
+    int err = add_file(to_dir, from_file, filename);
+    free(dir_path);
+    if (err)
+    {
+        return err;
+    } else {
+        from_file->links_num++;
+        return STATUS_OK;
+    }
+}
+
+int rmlink(char *path)
+{
+    descr_struct *file = lookup(path);
+    if (file == NULL)
+        return STATUS_NOT_FOUND;
+    char *filename = get_filename(path);
+    char *dir_path = get_dir_path(path);
+    descr_struct *dir = lookup(dir_path);
+    if (dir == NULL)
+        return STATUS_NOT_FOUND;
+    free(dir_path);
+    int err = rm_file(dir, filename);
+    if (err)
+        return err;
+    file->links_num--;
+    if (file->links_num == 0)
+        return rm_file_descr(file);
     return STATUS_OK;
 }

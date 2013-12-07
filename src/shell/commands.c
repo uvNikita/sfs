@@ -229,16 +229,44 @@ int com_write(char *arg)
 int com_link(char *arg)
 {
     if (!valid_argument("link", arg))
-        return 1;
-    printf("link command\n");
+        return STATUS_ERR;
+    char *from = arg;
+    char *to;
+    for (int i = 0; i < strlen(arg); ++i)
+    {
+        if (arg[i] == ' ')
+        {
+            arg[i] = '\0';
+            to = arg + i + 1;
+        }
+    }
+    if (!valid_path(from) || !valid_path(to))
+        return STATUS_ERR;
+    int err = mklink(from, to);
+    if (err == STATUS_NOT_FOUND)
+    {
+        fprintf(stderr, "No such file: %s\n", from);
+        return STATUS_ERR;
+    } else if(err) {
+        return STATUS_ERR;
+    }
     return STATUS_OK;
 }
 
-int com_unlink(char *arg)
+int com_unlink(char *path)
 {
-    if (!valid_argument("unlink", arg))
-        return 1;
-    printf("unlink command\n");
+    if (!valid_argument("unlink", path))
+        return STATUS_ERR;
+    if (!valid_path(path))
+        return STATUS_ERR;
+    int err = rmlink(path);
+    if (err == STATUS_NOT_FOUND)
+    {
+        fprintf(stderr, "No such file: %s\n", path);
+        return STATUS_ERR;
+    } else if(err) {
+        return STATUS_ERR;
+    }
     return STATUS_OK;
 }
 
