@@ -388,8 +388,29 @@ int com_unlink(char *path)
 int com_tranc(char *arg)
 {
     if (!valid_argument("tranc", arg))
-        return 1;
-    printf("tranc command\n");
+        return STATUS_ERR;
+    char *path = arg;
+    char *size_arg;
+    for (int i = 0; i < strlen(arg); ++i)
+    {
+        if (arg[i] == ' ')
+        {
+            arg[i] = '\0';
+            size_arg = arg + i + 1;
+        }
+    }
+    if (!valid_path(path))
+        return STATUS_ERR;
+    int size = atoi(size_arg);
+    int err = trancate(path, size);
+    if (err == STATUS_NOT_FOUND)
+    {
+        fprintf(stderr, "No such file: %s\n", path);
+        return STATUS_ERR;
+    } else if (err == STATUS_NO_SPACE_LEFT) {
+        fprintf(stderr, "No space left\n");
+        return STATUS_ERR;
+    }
     return STATUS_OK;
 }
 

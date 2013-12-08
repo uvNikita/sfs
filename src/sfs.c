@@ -678,3 +678,33 @@ int write_file(int fid, int offset, int size, char *data)
     return STATUS_OK;
 }
 
+int trancate(char *path, int new_size)
+{
+    descr_struct *file = lookup(path);
+    if (file == NULL)
+        return STATUS_NOT_FOUND;
+    if (file->type != FILE_TYPE)
+        return STATUS_NOT_FILE;
+    int *blocks = BLOCKS(file->blocks_id);
+    int old_blocks_num = BLOCKS_NUM(file);
+    if (file->size > new_size)
+    {
+        file->size = new_size;
+        for (int i = old_blocks_num - 1; i >= BLOCKS_NUM(file); --i)
+        {
+            umask_block(blocks[i]);
+            blocks[i] = 0;
+        }
+    } else {
+        int fid = open_file(path);
+        int add_bytes = new_size - file->size;
+        char *data = malloc(add_bytes);
+        memset(data, 0, add_bytes);
+        int err = write_file(fid, file->size, new_size - file->size, data);
+        close_file(fid);
+        free(data);
+        return err;
+    }
+    return STATUS_OK;
+}
+
