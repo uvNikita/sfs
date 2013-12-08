@@ -331,6 +331,15 @@ int rm_file_descr(descr_struct *descr)
     return STATUS_OK;
 }
 
+int check_fid(int fid)
+{
+    if (fid >= FIDS_NUM || fid < 0)
+        return STATUS_NOT_FOUND;
+    if (FIDS[fid] == -1)
+        return STATUS_NOT_FOUND;
+    return STATUS_OK;
+}
+
 int create_fid(descr_struct *file)
 {
     for (int fid = 0; fid < FIDS_NUM; ++fid)
@@ -346,10 +355,9 @@ int create_fid(descr_struct *file)
 
 int rm_fid(int fid)
 {
-    if (fid >= FIDS_NUM || fid < 0)
-        return STATUS_NOT_FOUND;
-    if (FIDS[fid] == -1)
-        return STATUS_NOT_FOUND;
+    int err = check_fid(fid);
+    if (err)
+        return err;
     FIDS[fid] = -1;
     return STATUS_OK;
 }
@@ -589,5 +597,84 @@ int open_file(char *path)
 int close_file(int fid)
 {
     return rm_fid(fid);
+}
+
+int read_file(int fid, int offset, int size, char *data)
+{
+    int err = check_fid(fid);
+    if (err)
+        return err;
+    descr_struct *file = DESCR_TABLE + FIDS[fid];
+    if (file->type != FILE_TYPE)
+        return STATUS_NOT_FILE;
+    if (offset + size > file->size)
+        return STATUS_SIZE_ERR;
+    int *blocks = BLOCKS(file->blocks_id);
+    int block_id = offset / FS->block_size;
+    int b_id = offset % FS->block_size;
+    char *block = BLOCKS(blocks[block_id]);
+    for (int i = 0; i < size; ++i)
+    {
+        data[i] = block[b_id];
+        b_id++;
+        if (b_id >= FS->block_size)
+        {
+            b_id = 0;
+            block_id++;
+            block = BLOCKS(blocks[block_id]);
+        }
+    }
+    return STATUS_OK;
+}
+
+int write_file(int fid, int offset, int size, char *data)
+{
+    int err = check_fid(fid);
+    if (err)
+        return err;
+    descr_struct *file = DESCR_TABLE + FIDS[fid];
+    if (file->type != FILE_TYPE)
+        return STATUS_NOT_FILE;
+    if (offset > file->size)
+        return STATUS_SIZE_ERR;
+
+    int *blocks = BLOCKS(file->blocks_id);
+    int old_blocks_num = BLOCKS_NUM(file);
+    printf("old blocks num: %d\n", old_blocks_num);
+    printf("old size: %d\n", file->size);
+    file->size += size - (file->size - offset);
+    printf("new size: %d\n", file->size);
+    printf("new blocks num: %d\n", BLOCKS_NUM(file));
+    // add new blocks
+    for (int i = old_blocks_num; i < BLOCKS_NUM(file); ++i)
+    {
+        int block_id = find_block();
+        if (block_id == -1)
+        {
+            // TODO: release blocks
+            return STATUS_NO_SPACE_LEFT;
+        }
+        mask_block(block_id);
+        blocks[i] = block_id;
+    }
+
+    int block_id = offset / FS->block_size;
+    printf("block_id: %d\n", block_id);
+    printf("block: %d\n", blocks[block_id]);
+    int b_id = offset % FS->block_size;
+    printf("b_id: %d\n", b_id);
+    char *block = BLOCKS(blocks[block_id]);
+    for (int i = 0; i < size; ++i)
+    {
+        block[b_id] = data[i];
+        b_id++;
+        if (b_id >= FS->block_size)
+        {
+            b_id = 0;
+            block_id++;
+            block = BLOCKS(blocks[block_id]);
+        }
+    }
+    return STATUS_OK;
 }
 

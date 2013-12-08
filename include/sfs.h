@@ -6,6 +6,7 @@
 #define STATUS_NOT_FOUND 5
 #define STATUS_EXISTS_ERR 6
 #define STATUS_NOT_FILE 7
+#define STATUS_SIZE_ERR 8
 
 int mount(char *path);
 int umount();
@@ -18,3 +19,5 @@ int mklink(char *from, char *to);
 int rmlink(char *path);
 int open_file(char *path);
 int close_file(int fid);
+int read_file(int fid, int offset, int size, char *data);
+int write_file(int fid, int offset, int size, char *data);

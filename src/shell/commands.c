@@ -228,16 +228,116 @@ int com_close(char *fid_arg)
 int com_read(char *arg)
 {
     if (!valid_argument("read", arg))
-        return 1;
-    printf("read command\n");
+        return STATUS_ERR;
+    char *fid_arg = arg;
+    char *offset_arg;
+    for (int i = 0; i < strlen(arg); ++i)
+    {
+        if (arg[i] == ' ')
+        {
+            arg[i] = '\0';
+            offset_arg = arg + i + 1;
+        }
+    }
+    if (offset_arg == NULL)
+    {
+        fprintf(stderr, "offset param missing\n");
+        return STATUS_ERR;
+    }
+
+    char *size_arg;
+    for (int i = 0; i < strlen(offset_arg); ++i)
+    {
+        if (offset_arg[i] == ' ')
+        {
+            offset_arg[i] = '\0';
+            size_arg = offset_arg + i + 1;
+        }
+    }
+    if (size_arg == NULL)
+    {
+        fprintf(stderr, "size param missing\n");
+        return STATUS_ERR;
+    }
+    int fid = atoi(fid_arg);
+    int offset = atoi(offset_arg);
+    int size = atoi(size_arg);
+    char *data = malloc(size + 1);
+    data[size] = '\0';
+    int err = read_file(fid, offset, size, data);
+    if (err == STATUS_NOT_FOUND)
+    {
+        fprintf(stderr, "No such fid: %d\n", fid);
+        return STATUS_ERR;
+    } else if (err == STATUS_SIZE_ERR) {
+        fprintf(stderr, "Wrong size or offset\n");
+        return STATUS_ERR;
+    }
+    printf("%s\n", data);
+    free(data);
     return STATUS_OK;
 }
 
 int com_write(char *arg)
 {
     if (!valid_argument("write", arg))
-        return 1;
-    printf("write command\n");
+        return STATUS_ERR;
+    char *fid_arg = arg;
+    char *offset_arg;
+    for (int i = 0; i < strlen(arg); ++i)
+    {
+        if (arg[i] == ' ')
+        {
+            arg[i] = '\0';
+            offset_arg = arg + i + 1;
+        }
+    }
+    if (offset_arg == NULL)
+    {
+        fprintf(stderr, "offset param missing\n");
+        return STATUS_ERR;
+    }
+
+    char *size_arg;
+    for (int i = 0; i < strlen(offset_arg); ++i)
+    {
+        if (offset_arg[i] == ' ')
+        {
+            offset_arg[i] = '\0';
+            size_arg = offset_arg + i + 1;
+        }
+    }
+    if (size_arg == NULL)
+    {
+        fprintf(stderr, "size param missing\n");
+        return STATUS_ERR;
+    }
+    int fid = atoi(fid_arg);
+    int offset = atoi(offset_arg);
+    int size = atoi(size_arg);
+    char *data = malloc(size + 1);
+    printf("%d\n", offset);
+    fgets(data, size + 1, stdin);
+
+    // remove other from stdin
+    int c;
+    do {
+        c = getchar();
+    } while (c != EOF && c != '\n');
+
+    int err = write_file(fid, offset, size, data);
+    if (err == STATUS_NOT_FOUND)
+    {
+        fprintf(stderr, "No such fid: %d\n", fid);
+        return STATUS_ERR;
+    } else if (err == STATUS_NO_SPACE_LEFT) {
+        fprintf(stderr, "No space left\n");
+        return STATUS_ERR;
+    } else if (err == STATUS_SIZE_ERR) {
+        fprintf(stderr, "Wrong size or offset\n");
+        return STATUS_ERR;
+    }
+    free(data);
     return STATUS_OK;
 }
 
