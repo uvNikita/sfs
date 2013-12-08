@@ -194,19 +194,34 @@ int com_create(char *path)
     }
 }
 
-int com_open(char *arg)
+int com_open(char *path)
 {
-    if (!valid_argument("open", arg))
-        return 1;
-    printf("open command\n");
+    if (!valid_argument("open", path))
+        return STATUS_ERR;
+    int fid = open_file(path);
+    if (fid == -1)
+    {
+        fprintf(stderr, "Can't open '%s'\n", path);
+        return STATUS_ERR;
+    }
+    printf("fid: %d\n", fid);
     return STATUS_OK;
 }
 
-int com_close(char *arg)
+int com_close(char *fid_arg)
 {
-    if (!valid_argument("close", arg))
-        return 1;
-    printf("close command\n");
+    if (!valid_argument("close", fid_arg))
+        return STATUS_ERR;
+    int fid = atoi(fid_arg);
+    int err = close_file(fid);
+    if (err == STATUS_NOT_FOUND)
+    {
+        fprintf(stderr, "No such fid: %d\n", fid);
+        return STATUS_ERR;
+    } else if(err) {
+        fprintf(stderr, "Something goes wrong :(\n");
+        return STATUS_ERR;
+    }
     return STATUS_OK;
 }
 

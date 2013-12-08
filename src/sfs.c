@@ -16,6 +16,7 @@
 #define FILE_TYPE 2
 #define LINK_TYPE 3
 #define FILENAME_SIZE 20
+#define FIDS_NUM 512
 
 #define MASK ((uint8_t *) (char *)FS + FS->mask_offset)
 #define DESCR_TABLE ((descr_struct *) ((char *)FS + FS->descr_table_offset))
@@ -50,6 +51,7 @@ typedef struct {
 } file_struct;
 
 fs_struct *FS = NULL;
+int FIDS[FIDS_NUM] = {[0 ... FIDS_NUM - 1] = -1};
 
 /* Forward declarations. */
 int map_fs(char *path);
@@ -329,6 +331,29 @@ int rm_file_descr(descr_struct *descr)
     return STATUS_OK;
 }
 
+int create_fid(descr_struct *file)
+{
+    for (int fid = 0; fid < FIDS_NUM; ++fid)
+    {
+        if (FIDS[fid] == -1)
+        {
+            FIDS[fid] = file->id;
+            return fid;
+        }
+    }
+    return -1;
+}
+
+int rm_fid(int fid)
+{
+    if (fid >= FIDS_NUM || fid < 0)
+        return STATUS_NOT_FOUND;
+    if (FIDS[fid] == -1)
+        return STATUS_NOT_FOUND;
+    FIDS[fid] = -1;
+    return STATUS_OK;
+}
+
 int list(char *path)
 {
     int err = check_mount();
@@ -549,3 +574,20 @@ int rmlink(char *path)
         return rm_file_descr(file);
     return STATUS_OK;
 }
+
+int open_file(char *path)
+{
+    descr_struct *file = lookup(path);
+    if (file == NULL)
+        return -1;
+    if (file->type != FILE_TYPE)
+        return -1;
+
+    return create_fid(file);
+}
+
+int close_file(int fid)
+{
+    return rm_fid(fid);
+}
+
