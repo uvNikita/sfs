@@ -27,7 +27,15 @@ int main(int argc, char **argv)
     /* Loop reading and executing lines until the user quits. */
     while(done == 0)
     {
-        char *line = readline("sfs: ");
+        char *line;
+        if (is_mount())
+        {
+            char ps[50];
+            sprintf(ps, "sfs %s: ", pwd());
+            line = readline(ps);
+        } else {
+            line = readline("sfs: ");
+        }
 
         if (!line)
             break;

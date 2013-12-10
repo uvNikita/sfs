@@ -17,6 +17,7 @@ int com_mkfs(char *arg);
 int com_stat(char *arg);
 int com_list(char *arg);
 int com_pwd(char *arg);
+int com_cd(char *arg);
 int com_create(char *arg);
 int com_mkdir(char *arg);
 int com_help(char *arg);
@@ -39,6 +40,7 @@ COMMAND commands[] = {
     { "?", com_help, "Synonym for `help'" },
     { "list", com_list, "List files in DIR" },
     { "ls", com_list, "Synonym for `list'" },
+    { "cd", com_cd, "Change working directory" },
     { "create", com_create, "Create file with FILENAME" },
     { "mkdir", com_mkdir, "Create dir with DIRNAME" },
     { "open", com_open, "Open FILE, get FD" },
@@ -479,6 +481,20 @@ int com_pwd(char *ignore)
     char *work_dir = pwd();
     if (work_dir)
         printf("%s\n", pwd());
+    return STATUS_OK;
+}
+
+int com_cd(char *path)
+{
+    int err = cd(path);
+    if (err == STATUS_NOT_FOUND)
+    {
+        fprintf(stderr, "No such file or directory\n");
+        return STATUS_ERR;
+    } else if(err == STATUS_NOT_DIR) {
+        fprintf(stderr, "'%s' is not directory\n", path);
+        return STATUS_ERR;
+    }
     return STATUS_OK;
 }
 
