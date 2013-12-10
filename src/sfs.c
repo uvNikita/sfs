@@ -242,7 +242,7 @@ descr_struct *lookup(char *path)
 
 }
 
-int add_file(descr_struct *dir, descr_struct *file, char *filename)
+int add_to_dir(descr_struct *dir, descr_struct *file, char *filename)
 {
     int left = SPACE_LEFT(dir);
     file_struct *new_file;
@@ -452,6 +452,8 @@ int mkfs(char *path)
     }
     mask_block(block_num);
     root->blocks_id = block_num;
+    add_to_dir(root, root, ".");
+    add_to_dir(root, root, "..");
 
     // all files are free
     for (int i = 1; i < FS->max_files; ++i)
@@ -497,7 +499,7 @@ int create_file(char *path)
     descr_struct *dir = lookup(dir_path);
     free(dir_path);
 
-    return add_file(dir, file, filename);
+    return add_to_dir(dir, file, filename);
 }
 
 
@@ -552,7 +554,7 @@ int mklink(char *from, char *to)
     descr_struct *to_dir = lookup(dir_path);
     if (to_dir == NULL)
         return STATUS_NOT_FOUND;
-    int err = add_file(to_dir, from_file, filename);
+    int err = add_to_dir(to_dir, from_file, filename);
     free(dir_path);
     if (err)
     {
@@ -701,3 +703,42 @@ int trancate(char *path, int new_size)
     return STATUS_OK;
 }
 
+int make_dir(char *path)
+{
+    int err = check_mount();
+    if (err)
+        return err;
+    if (lookup(path) != NULL)
+    {
+        return STATUS_EXISTS_ERR;
+    }
+    descr_struct *dir = find_descr();
+    if (dir == NULL)
+        return STATUS_MAX_FILES_REACHED;
+
+    int block_num = find_block();
+    mask_block(block_num);
+
+    if (block_num == -1)
+        return STATUS_NO_SPACE_LEFT;
+
+    dir->type = DIR_TYPE;
+    dir->links_num = 1;
+    dir->size = 0;
+    dir->blocks_id = block_num;
+
+    char *name = get_filename(path);
+    char *dir_path = get_dir_path(path);
+    descr_struct *parent_dir = lookup(dir_path);
+    free(dir_path);
+
+    err = add_to_dir(parent_dir, dir, name);
+    if (err)
+        return err;
+
+    err = add_to_dir(dir, dir, ".");
+    if (err)
+        return err;
+
+    return add_to_dir(dir, parent_dir, "..");
+}

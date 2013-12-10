@@ -18,6 +18,7 @@ int com_stat(char *arg);
 int com_list(char *arg);
 int com_pwd(char *arg);
 int com_create(char *arg);
+int com_mkdir(char *arg);
 int com_help(char *arg);
 int com_open(char *arg);
 int com_quit(char *arg);
@@ -39,6 +40,7 @@ COMMAND commands[] = {
     { "list", com_list, "List files in DIR" },
     { "ls", com_list, "Synonym for `list'" },
     { "create", com_create, "Create file with FILENAME" },
+    { "mkdir", com_mkdir, "Create dir with DIRNAME" },
     { "open", com_open, "Open FILE, get FD" },
     { "close", com_close, "Close file FD" },
     { "read", com_read, "Read from file: FD, OFFSET, SIZE" },
@@ -187,7 +189,26 @@ int com_create(char *path)
         fprintf(stderr, "No space left on device\n");
         return STATUS_ERR;
     } else if (err == STATUS_EXISTS_ERR) {
-        fprintf(stderr, "File already exists\n");
+        fprintf(stderr, "File or directory already exists\n");
+        return STATUS_ERR;
+    } else {
+        return STATUS_OK;
+    }
+}
+
+int com_mkdir(char *path)
+{
+    if (!valid_argument("mkdir", path))
+        return STATUS_ERR;
+    if (!valid_path(path))
+        return STATUS_ERR;
+    int err = make_dir(path);
+    if (err == STATUS_NO_SPACE_LEFT)
+    {
+        fprintf(stderr, "No space left on device\n");
+        return STATUS_ERR;
+    } else if (err == STATUS_EXISTS_ERR) {
+        fprintf(stderr, "File or directory already exists\n");
         return STATUS_ERR;
     } else {
         return STATUS_OK;

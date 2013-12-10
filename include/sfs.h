@@ -22,3 +22,4 @@ int close_file(int fid);
 int read_file(int fid, int offset, int size, char *data);
 int write_file(int fid, int offset, int size, char *data);
 int trancate(char *path, int new_size);
+int make_dir(char *path);
