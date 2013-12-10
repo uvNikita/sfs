@@ -52,6 +52,7 @@ typedef struct {
 
 fs_struct *FS = NULL;
 int FIDS[FIDS_NUM] = {[0 ... FIDS_NUM - 1] = -1};
+char *WORK_DIR;
 
 /* Forward declarations. */
 int map_fs(char *path);
@@ -61,12 +62,17 @@ int check_mount();
 
 int mount(char *path)
 {
-    return map_fs(path);
+    int err = map_fs(path);
+    if (err)
+        return err;
+    WORK_DIR = "/";
+    return STATUS_OK;
 }
 
 int umount()
 {
     int err = check_mount();
+    WORK_DIR = NULL;
     if (err)
         return err;
     return umap_fs();
@@ -425,7 +431,6 @@ int mkfs(char *path)
         umask_block(i);
     }
 
-
     // first block for info
     mask_block(0);
 
@@ -750,4 +755,12 @@ int make_dir(char *path)
         return err;
 
     return add_to_dir(dir, parent_dir, "..");
+}
+
+char *pwd()
+{
+    int err = check_mount();
+    if (err)
+        return NULL;
+    return WORK_DIR;
 }

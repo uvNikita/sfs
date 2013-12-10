@@ -476,7 +476,9 @@ int com_help(char *arg)
 /* Print out the current working directory. */
 int com_pwd(char *ignore)
 {
-    printf("/");
+    char *work_dir = pwd();
+    if (work_dir)
+        printf("%s\n", pwd());
     return STATUS_OK;
 }
 
