@@ -375,7 +375,16 @@ int list(char *path)
     int block_id = 0;
     for (int f_id = 0; f_id < FILES_NUM(dir); ++f_id)
     {
-        printf("%s\tid:%d\n", files[bf_id].filename, files[bf_id].descr_id);
+        file_struct *file = files + bf_id;
+        descr_struct *file_descr = DESCR_TABLE + file->descr_id;
+        char *format;
+        if (file_descr->type == FILE_TYPE)
+            format = "%s\tid:%d\n";
+        if (file_descr->type == DIR_TYPE)
+            format = "%s/\tid:%d\n";
+        if (file_descr->type == LINK_TYPE)
+            format = "%s@\tid:%d\n";
+        printf(format, file->filename, file->descr_id);
         bf_id++;
         if (bf_id == FILES_IN_BLOCK)
         {
