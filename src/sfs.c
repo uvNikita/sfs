@@ -640,11 +640,7 @@ int write_file(int fid, int offset, int size, char *data)
 
     int *blocks = BLOCKS(file->blocks_id);
     int old_blocks_num = BLOCKS_NUM(file);
-    printf("old blocks num: %d\n", old_blocks_num);
-    printf("old size: %d\n", file->size);
     file->size += size - (file->size - offset);
-    printf("new size: %d\n", file->size);
-    printf("new blocks num: %d\n", BLOCKS_NUM(file));
     // add new blocks
     for (int i = old_blocks_num; i < BLOCKS_NUM(file); ++i)
     {
@@ -659,10 +655,7 @@ int write_file(int fid, int offset, int size, char *data)
     }
 
     int block_id = offset / FS->block_size;
-    printf("block_id: %d\n", block_id);
-    printf("block: %d\n", blocks[block_id]);
     int b_id = offset % FS->block_size;
-    printf("b_id: %d\n", b_id);
     char *block = BLOCKS(blocks[block_id]);
     for (int i = 0; i < size; ++i)
     {
