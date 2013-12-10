@@ -8,6 +8,7 @@
 #define STATUS_NOT_FILE 7
 #define STATUS_NOT_DIR 8
 #define STATUS_SIZE_ERR 9
+#define STATUS_NOT_EMPTY 10
 
 int mount(char *path);
 int umount();
@@ -24,6 +25,7 @@ int read_file(int fid, int offset, int size, char *data);
 int write_file(int fid, int offset, int size, char *data);
 int trancate(char *path, int new_size);
 int make_dir(char *path);
+int remove_dir(char *path);
 int cd(char *path);
 char *pwd();
 int is_mount();

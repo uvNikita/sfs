@@ -20,6 +20,7 @@ int com_pwd(char *arg);
 int com_cd(char *arg);
 int com_create(char *arg);
 int com_mkdir(char *arg);
+int com_rmdir(char *arg);
 int com_help(char *arg);
 int com_open(char *arg);
 int com_quit(char *arg);
@@ -43,6 +44,7 @@ COMMAND commands[] = {
     { "cd", com_cd, "Change working directory" },
     { "create", com_create, "Create file with FILENAME" },
     { "mkdir", com_mkdir, "Create dir with DIRNAME" },
+    { "rmdir", com_rmdir, "Remove empty directory" },
     { "open", com_open, "Open FILE, get FD" },
     { "close", com_close, "Close file FD" },
     { "read", com_read, "Read from file: FD, OFFSET, SIZE" },
@@ -215,6 +217,27 @@ int com_mkdir(char *path)
     } else {
         return STATUS_OK;
     }
+}
+
+int com_rmdir(char *path)
+{
+    if (!valid_argument("unlink", path))
+        return STATUS_ERR;
+    if (!valid_path(path))
+        return STATUS_ERR;
+    int err = remove_dir(path);
+    if (err == STATUS_NOT_FOUND)
+    {
+        fprintf(stderr, "No such file or directory: %s\n", path);
+        return STATUS_ERR;
+    } else if(err == STATUS_NOT_DIR) {
+        fprintf(stderr, "Not directory: %s\n", path);
+        return STATUS_ERR;
+    } else if(err == STATUS_NOT_EMPTY) {
+        fprintf(stderr, "Directory not empty: %s\n", path);
+        return STATUS_ERR;
+    }
+    return STATUS_OK;
 }
 
 int com_open(char *path)
@@ -402,7 +425,8 @@ int com_unlink(char *path)
     {
         fprintf(stderr, "No such file: %s\n", path);
         return STATUS_ERR;
-    } else if(err) {
+    } else if(err == STATUS_NOT_FILE) {
+        fprintf(stderr, "Not file: %s\n", path);
         return STATUS_ERR;
     }
     return STATUS_OK;

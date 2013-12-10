@@ -272,7 +272,7 @@ int add_to_dir(descr_struct *dir, descr_struct *file, char *filename)
     return STATUS_OK;
 }
 
-int rm_file(descr_struct *dir, char *filename)
+int rm_from_dir(descr_struct *dir, char *filename)
 {
     int *blocks = BLOCKS(dir->blocks_id);
     file_struct *files = BLOCKS(blocks[0]);
@@ -327,8 +327,13 @@ int rm_file(descr_struct *dir, char *filename)
     return STATUS_OK;
 }
 
-int rm_file_descr(descr_struct *descr)
+int rm_descr(descr_struct *descr)
 {
+    int *blocks = BLOCKS(descr->blocks_id);
+    for (int i = 0; i < BLOCKS_NUM(descr); ++i)
+    {
+        umask_block(blocks[i]);
+    }
     umask_block(descr->blocks_id);
     descr->type = 0;
     descr->size = 0;
@@ -584,18 +589,20 @@ int rmlink(char *path)
     descr_struct *file = lookup(path);
     if (file == NULL)
         return STATUS_NOT_FOUND;
+    if (file->type != FILE_TYPE)
+        return STATUS_NOT_FILE;
     char *filename = get_filename(path);
     char *dir_path = get_dir_path(path);
     descr_struct *dir = lookup(dir_path);
+    free(dir_path);
     if (dir == NULL)
         return STATUS_NOT_FOUND;
-    free(dir_path);
-    int err = rm_file(dir, filename);
+    int err = rm_from_dir(dir, filename);
     if (err)
         return err;
     file->links_num--;
     if (file->links_num == 0)
-        return rm_file_descr(file);
+        return rm_descr(file);
     return STATUS_OK;
 }
 
@@ -783,4 +790,28 @@ int cd(char *path)
 int is_mount()
 {
     return FS != NULL;
+}
+
+int remove_dir(char *path)
+{
+    descr_struct *dir = lookup(path);
+    if (dir == NULL)
+        return STATUS_NOT_FOUND;
+    if (dir->type != DIR_TYPE)
+        return STATUS_NOT_DIR;
+    char *name = get_filename(path);
+    char *dir_path = get_dir_path(path);
+    descr_struct *parent_dir = lookup(dir_path);
+    free(dir_path);
+    if (parent_dir == NULL)
+        return STATUS_NOT_FOUND;
+    if (dir->size > 2 * sizeof(file_struct))
+        return STATUS_NOT_EMPTY;
+    int err = rm_from_dir(parent_dir, name);
+    if (err)
+        return err;
+    dir->links_num--;
+    if (dir->links_num == 0)
+        return rm_descr(dir);
+    return STATUS_OK;
 }
