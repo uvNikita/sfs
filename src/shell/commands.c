@@ -175,7 +175,7 @@ int com_stat(char *descr_id)
 int com_list(char *path)
 {
     if (path == NULL || (strcmp(path, "") == 0))
-        path = "/";
+        path = pwd();
     if (!valid_path(path))
         return STATUS_ERR;
     return list(path);
