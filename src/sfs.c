@@ -953,3 +953,13 @@ int mksymlink(char *from_arg, char *to_arg)
     free(from);
     return err;
 }
+
+int get_file_size(char *path_arg)
+{
+    char *path = abs_path(path_arg);
+    descr_struct *file = lookup(path);
+    free(path);
+    if (file == NULL)
+        return -1;
+    return file->size;
+}

@@ -29,5 +29,6 @@ int remove_dir(char *path);
 int mksymlink(char *from_arg, char *to_arg);
 int cd(char *path);
 int is_mount();
+int get_file_size(char *path_arg);
 char *pwd();
 char *abs_path(char *path);

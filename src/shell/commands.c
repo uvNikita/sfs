@@ -31,6 +31,7 @@ int com_unlink(char *arg);
 int com_read(char *arg);
 int com_write(char *arg);
 int com_symlink(char *arg);
+int com_cat(char *arg);
 int com_dump_stats(char *arg);
 
 COMMAND commands[] = {
@@ -55,6 +56,7 @@ COMMAND commands[] = {
     { "pwd", com_pwd, "Print the current working directory" },
     { "tranc", com_tranc, "Change FILE size to SIZE" },
     { "symlink", com_symlink, "Create symlink from FILE1 to FILE2" },
+    { "cat", com_cat, "Display whole file contents" },
     { "dump", com_dump_stats, "Print file system stats" },
     { "quit", com_quit, "Quit shell" },
     { (char *)NULL, (Function *)NULL, (char *)NULL }
@@ -361,7 +363,6 @@ int com_write(char *arg)
     int offset = atoi(offset_arg);
     int size = atoi(size_arg);
     char *data = malloc(size + 1);
-    printf("%d\n", offset);
     fgets(data, size + 1, stdin);
 
     // remove other from stdin
@@ -475,6 +476,33 @@ int com_tranc(char *arg)
     } else if (err == STATUS_NO_SPACE_LEFT) {
         fprintf(stderr, "No space left\n");
         return STATUS_ERR;
+    }
+    return STATUS_OK;
+}
+
+int com_cat(char *path)
+{
+    if (!valid_argument("cat", path))
+        return STATUS_ERR;
+    int fid = open_file(path);
+    if (fid == -1)
+    {
+        fprintf(stderr, "Can't open '%s'\n", path);
+        return STATUS_ERR;
+    }
+    int size = get_file_size(path);
+    char *data = malloc(size);
+    int err = read_file(fid, 0, size, data);
+    close_file(fid);
+    if (err == STATUS_NOT_FOUND)
+    {
+        fprintf(stderr, "No such file: %s\n", path);
+        return STATUS_ERR;
+    } else if(err == STATUS_NOT_FILE) {
+        fprintf(stderr, "Not file: %s\n", path);
+        return STATUS_ERR;
+    } else {
+        printf("%s\n", data);
     }
     return STATUS_OK;
 }
