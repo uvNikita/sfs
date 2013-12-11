@@ -29,3 +29,4 @@ int remove_dir(char *path);
 int cd(char *path);
 char *pwd();
 int is_mount();
+char *abs_path(char *path);

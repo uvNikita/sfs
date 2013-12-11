@@ -17,6 +17,7 @@
 #define LINK_TYPE 3
 #define FILENAME_SIZE 20
 #define FIDS_NUM 512
+#define MAX_PATH_SIZE 512
 
 #define MASK ((uint8_t *) (char *)FS + FS->mask_offset)
 #define DESCR_TABLE ((descr_struct *) ((char *)FS + FS->descr_table_offset))
@@ -52,7 +53,7 @@ typedef struct {
 
 fs_struct *FS = NULL;
 int FIDS[FIDS_NUM] = {[0 ... FIDS_NUM - 1] = -1};
-char WORK_DIR[512];
+char WORK_DIR[MAX_PATH_SIZE];
 
 /* Forward declarations. */
 int map_fs(char *path);
@@ -214,7 +215,6 @@ char *get_dir_path(char *path)
 
 descr_struct *lookup(char *path)
 {
-    // TODO: implement searching descriptor by path
     if (strcmp(path, "/") == 0)
     {
         return DESCR_TABLE + 0;
@@ -373,13 +373,26 @@ int rm_fid(int fid)
     return STATUS_OK;
 }
 
-int list(char *path)
+int list(char *path_arg)
 {
     int err = check_mount();
     if (err)
         return err;
 
+    char *path = abs_path(path_arg);
     descr_struct *dir = lookup(path);
+    if (dir == NULL)
+    {
+        free(path);
+        return STATUS_NOT_FOUND;
+    }
+    if (dir->type != DIR_TYPE)
+    {
+        printf("%s\n", path);
+        free(path);
+        return STATUS_OK;
+    }
+    free(path);
     int *blocks = BLOCKS(dir->blocks_id);
     file_struct *files = BLOCKS(blocks[0]);
     int bf_id = 0;
@@ -489,24 +502,32 @@ int mkfs(char *path)
     return umap_fs();
 }
 
-int create_file(char *path)
+int create_file(char *path_arg)
 {
     int err = check_mount();
     if (err)
         return err;
+    char *path = abs_path(path_arg);
     if (lookup(path) != NULL)
     {
+        free(path);
         return STATUS_EXISTS_ERR;
     }
     descr_struct *file = find_descr();
     if (file == NULL)
+    {
+        free(path);
         return STATUS_MAX_FILES_REACHED;
+    }
 
     int block_num = find_block();
     mask_block(block_num);
 
     if (block_num == -1)
+    {
+        free(path);
         return STATUS_NO_SPACE_LEFT;
+    }
 
     file->type = FILE_TYPE;
     file->links_num = 1;
@@ -517,8 +538,9 @@ int create_file(char *path)
     char *dir_path = get_dir_path(path);
     descr_struct *dir = lookup(dir_path);
     free(dir_path);
-
-    return add_to_dir(dir, file, filename);
+    err = add_to_dir(dir, file, filename);
+    free(path);
+    return err;
 }
 
 
@@ -563,18 +585,25 @@ int filestat(int descr_id)
     return STATUS_OK;
 }
 
-int mklink(char *from, char *to)
+int mklink(char *from_arg, char *to_arg)
 {
+    char *from = abs_path(from_arg);
     descr_struct *from_file = lookup(from);
+    free(from);
     if (from_file == NULL)
         return STATUS_NOT_FOUND;
+    char *to = abs_path(to_arg);
     char *dir_path = get_dir_path(to);
     char *filename = get_filename(to);
     descr_struct *to_dir = lookup(dir_path);
-    if (to_dir == NULL)
-        return STATUS_NOT_FOUND;
-    int err = add_to_dir(to_dir, from_file, filename);
     free(dir_path);
+    if (to_dir == NULL)
+    {
+        free(to);
+        return STATUS_NOT_FOUND;
+    }
+    int err = add_to_dir(to_dir, from_file, filename);
+    free(to);
     if (err)
     {
         return err;
@@ -584,13 +613,20 @@ int mklink(char *from, char *to)
     }
 }
 
-int rmlink(char *path)
+int rmlink(char *path_arg)
 {
+    char *path = abs_path(path_arg);
     descr_struct *file = lookup(path);
     if (file == NULL)
+    {
+        free(path);
         return STATUS_NOT_FOUND;
+    }
     if (file->type != FILE_TYPE)
+    {
+        free(path);
         return STATUS_NOT_FILE;
+    }
     char *filename = get_filename(path);
     char *dir_path = get_dir_path(path);
     descr_struct *dir = lookup(dir_path);
@@ -598,6 +634,7 @@ int rmlink(char *path)
     if (dir == NULL)
         return STATUS_NOT_FOUND;
     int err = rm_from_dir(dir, filename);
+    free(path);
     if (err)
         return err;
     file->links_num--;
@@ -606,9 +643,11 @@ int rmlink(char *path)
     return STATUS_OK;
 }
 
-int open_file(char *path)
+int open_file(char *path_arg)
 {
+    char *path = abs_path(path_arg);
     descr_struct *file = lookup(path);
+    free(path);
     if (file == NULL)
         return -1;
     if (file->type != FILE_TYPE)
@@ -694,9 +733,11 @@ int write_file(int fid, int offset, int size, char *data)
     return STATUS_OK;
 }
 
-int trancate(char *path, int new_size)
+int trancate(char *path_arg, int new_size)
 {
+    char *path = abs_path(path_arg);
     descr_struct *file = lookup(path);
+    free(path);
     if (file == NULL)
         return STATUS_NOT_FOUND;
     if (file->type != FILE_TYPE)
@@ -712,7 +753,7 @@ int trancate(char *path, int new_size)
             blocks[i] = 0;
         }
     } else {
-        int fid = open_file(path);
+        int fid = open_file(path_arg);
         int add_bytes = new_size - file->size;
         char *data = malloc(add_bytes);
         memset(data, 0, add_bytes);
@@ -724,24 +765,32 @@ int trancate(char *path, int new_size)
     return STATUS_OK;
 }
 
-int make_dir(char *path)
+int make_dir(char *path_arg)
 {
     int err = check_mount();
     if (err)
         return err;
+    char *path = abs_path(path_arg);
     if (lookup(path) != NULL)
     {
+        free(path);
         return STATUS_EXISTS_ERR;
     }
     descr_struct *dir = find_descr();
     if (dir == NULL)
+    {
+        free(path);
         return STATUS_MAX_FILES_REACHED;
+    }
 
     int block_num = find_block();
     mask_block(block_num);
 
     if (block_num == -1)
+    {
+        free(path);
         return STATUS_NO_SPACE_LEFT;
+    }
 
     dir->type = DIR_TYPE;
     dir->links_num = 1;
@@ -754,6 +803,7 @@ int make_dir(char *path)
     free(dir_path);
 
     err = add_to_dir(parent_dir, dir, name);
+    free(path);
     if (err)
         return err;
 
@@ -772,18 +822,26 @@ char *pwd()
     return WORK_DIR;
 }
 
-int cd(char *path)
+int cd(char *path_arg)
 {
     int err = check_mount();
     if (err)
         return err;
+    char *path = abs_path(path_arg);
     descr_struct *dir = lookup(path);
     if (dir == NULL)
+    {
+        free(path);
         return STATUS_NOT_FOUND;
+    }
     if (dir->type != DIR_TYPE)
+    {
+        free(path);
         return STATUS_NOT_DIR;
+    }
 
     strcpy(WORK_DIR, path);
+    free(path);
     return STATUS_OK;
 }
 
@@ -792,26 +850,100 @@ int is_mount()
     return FS != NULL;
 }
 
-int remove_dir(char *path)
+int remove_dir(char *path_arg)
 {
+    char *path = abs_path(path_arg);
     descr_struct *dir = lookup(path);
     if (dir == NULL)
+    {
+        free(path);
         return STATUS_NOT_FOUND;
+    }
     if (dir->type != DIR_TYPE)
+    {
+        free(path);
         return STATUS_NOT_DIR;
+    }
     char *name = get_filename(path);
     char *dir_path = get_dir_path(path);
     descr_struct *parent_dir = lookup(dir_path);
     free(dir_path);
     if (parent_dir == NULL)
+    {
+        free(path);
         return STATUS_NOT_FOUND;
+    }
     if (dir->size > 2 * sizeof(file_struct))
+    {
+        free(path);
         return STATUS_NOT_EMPTY;
+    }
     int err = rm_from_dir(parent_dir, name);
+    free(path);
     if (err)
         return err;
     dir->links_num--;
     if (dir->links_num == 0)
         return rm_descr(dir);
     return STATUS_OK;
+}
+
+char *pack_path(char *path)
+{
+    if (strcmp(path, "/") == 0)
+    {
+        char *packed = malloc(2);
+        strcpy(packed, "/");
+        return packed;
+    }
+    char *name = get_filename(path);
+    char *dir_path = get_dir_path(path);
+    char *packed_dir = pack_path(dir_path);
+    free(dir_path);
+    if (strcmp(name, ".") == 0)
+    {
+        return packed_dir;
+    }
+    if (strcmp(name, "..") == 0)
+    {
+        char *dir_path = get_dir_path(packed_dir);
+        free(packed_dir);
+        return dir_path;
+    }
+    char *packed = malloc(strlen(path));
+    strcpy(packed, "");
+    strcat(packed, packed_dir);
+    if (strcmp(packed_dir, "/") != 0)
+        strcat(packed, "/");
+    strcat(packed, name);
+    free(packed_dir);
+    return packed;
+}
+
+char *abs_path(char *path_arg)
+{
+    char *path = malloc(MAX_PATH_SIZE);
+    strcpy(path, path_arg);
+    // strip trailing slash
+    int path_len = strlen(path);
+    while(path_len > 1 && path[path_len - 1] == '/')
+    {
+        path[path_len - 1] = '\0';
+        path_len--;
+    }
+    char *a_path = malloc(MAX_PATH_SIZE);
+    if (path[0] == '/')
+    {
+        strcpy(a_path, path);
+    } else {
+        strcpy(a_path, WORK_DIR);
+        if (strcmp(WORK_DIR, "/") != 0)
+            strcat(a_path, "/");
+        strcat(a_path, path);
+    }
+    free(path);
+
+    char *packed = pack_path(a_path);
+    free(a_path);
+    return packed;
 }

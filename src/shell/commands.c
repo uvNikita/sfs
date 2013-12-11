@@ -115,7 +115,6 @@ char *command_generator(const char *text, int state)
 
 /* Forward declarations. */
 int valid_argument(char *caller, char *arg);
-int valid_path(char *path);
 
 int com_mount(char *arg)
 {
@@ -176,16 +175,18 @@ int com_list(char *path)
 {
     if (path == NULL || (strcmp(path, "") == 0))
         path = pwd();
-    if (!valid_path(path))
+    int err = list(path);
+    if (err == STATUS_NOT_FOUND)
+    {
+        fprintf(stderr, "No such file or directory: %s\n", path);
         return STATUS_ERR;
-    return list(path);
+    }
+    return STATUS_OK;
 }
 
 int com_create(char *path)
 {
     if (!valid_argument("create", path))
-        return STATUS_ERR;
-    if (!valid_path(path))
         return STATUS_ERR;
     int err = create_file(path);
     if (err == STATUS_NO_SPACE_LEFT)
@@ -204,8 +205,6 @@ int com_mkdir(char *path)
 {
     if (!valid_argument("mkdir", path))
         return STATUS_ERR;
-    if (!valid_path(path))
-        return STATUS_ERR;
     int err = make_dir(path);
     if (err == STATUS_NO_SPACE_LEFT)
     {
@@ -222,8 +221,6 @@ int com_mkdir(char *path)
 int com_rmdir(char *path)
 {
     if (!valid_argument("unlink", path))
-        return STATUS_ERR;
-    if (!valid_path(path))
         return STATUS_ERR;
     int err = remove_dir(path);
     if (err == STATUS_NOT_FOUND)
@@ -401,8 +398,6 @@ int com_link(char *arg)
             to = arg + i + 1;
         }
     }
-    if (!valid_path(from) || !valid_path(to))
-        return STATUS_ERR;
     int err = mklink(from, to);
     if (err == STATUS_NOT_FOUND)
     {
@@ -417,8 +412,6 @@ int com_link(char *arg)
 int com_unlink(char *path)
 {
     if (!valid_argument("unlink", path))
-        return STATUS_ERR;
-    if (!valid_path(path))
         return STATUS_ERR;
     int err = rmlink(path);
     if (err == STATUS_NOT_FOUND)
@@ -446,8 +439,6 @@ int com_tranc(char *arg)
             size_arg = arg + i + 1;
         }
     }
-    if (!valid_path(path))
-        return STATUS_ERR;
     int size = atoi(size_arg);
     int err = trancate(path, size);
     if (err == STATUS_NOT_FOUND)
@@ -540,17 +531,6 @@ int valid_argument(char *caller, char *arg)
     if (!arg || !*arg)
     {
         fprintf(stderr, "%s: Argument required.\n", caller);
-        return 0;
-    }
-
-    return 1;
-}
-
-int valid_path(char *path)
-{
-    if (!path || path[0] != '/')
-    {
-        fprintf(stderr, "Only absolute path is supported\n");
         return 0;
     }
 
