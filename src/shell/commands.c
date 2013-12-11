@@ -30,6 +30,7 @@ int com_link(char *arg);
 int com_unlink(char *arg);
 int com_read(char *arg);
 int com_write(char *arg);
+int com_symlink(char *arg);
 int com_dump_stats(char *arg);
 
 COMMAND commands[] = {
@@ -49,10 +50,11 @@ COMMAND commands[] = {
     { "close", com_close, "Close file FD" },
     { "read", com_read, "Read from file: FD, OFFSET, SIZE" },
     { "write", com_write, "Write to file: FD, OFFSET, SIZE" },
-    { "link", com_link, "Create link from FILE1 ro FILE2" },
+    { "link", com_link, "Create link from FILE1 to FILE2" },
     { "unlink", com_unlink, "Destroy link LINK" },
     { "pwd", com_pwd, "Print the current working directory" },
     { "tranc", com_tranc, "Change FILE size to SIZE" },
+    { "symlink", com_symlink, "Create symlink from FILE1 to FILE2" },
     { "dump", com_dump_stats, "Print file system stats" },
     { "quit", com_quit, "Quit shell" },
     { (char *)NULL, (Function *)NULL, (char *)NULL }
@@ -420,6 +422,31 @@ int com_unlink(char *path)
         return STATUS_ERR;
     } else if(err == STATUS_NOT_FILE) {
         fprintf(stderr, "Not file: %s\n", path);
+        return STATUS_ERR;
+    }
+    return STATUS_OK;
+}
+
+int com_symlink(char *arg)
+{
+    if (!valid_argument("symlink", arg))
+        return STATUS_ERR;
+    char *from = arg;
+    char *to;
+    for (int i = 0; i < strlen(arg); ++i)
+    {
+        if (arg[i] == ' ')
+        {
+            arg[i] = '\0';
+            to = arg + i + 1;
+        }
+    }
+    int err = mksymlink(from, to);
+    if (err == STATUS_NOT_FOUND)
+    {
+        fprintf(stderr, "No such file or directory\n");
+        return STATUS_ERR;
+    } else if(err) {
         return STATUS_ERR;
     }
     return STATUS_OK;

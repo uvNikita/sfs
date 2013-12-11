@@ -401,14 +401,23 @@ int list(char *path_arg)
     {
         file_struct *file = files + bf_id;
         descr_struct *file_descr = DESCR_TABLE + file->descr_id;
-        char *format;
         if (file_descr->type == FILE_TYPE)
-            format = "%s\tid:%d\n";
+            printf( "%s \t\t id:%d\n", file->filename, file->descr_id);
         if (file_descr->type == DIR_TYPE)
-            format = "%s/\tid:%d\n";
+            printf( "%s/ \t\t id:%d\n", file->filename, file->descr_id);
         if (file_descr->type == LINK_TYPE)
-            format = "%s@\tid:%d\n";
-        printf(format, file->filename, file->descr_id);
+        {
+            char *file_path = malloc(strlen(path) + strlen(file->filename));
+            strcpy(file_path, path);
+            strcat(file_path, file->filename);
+            int fid = open_file(file_path);
+            char *link_path = malloc(file_descr->size);
+            read_file(fid, 0, file_descr->size, link_path);
+            close_file(fid);
+            printf("%s@ -> %s \t id:%d\n", file->filename, link_path, file->descr_id);
+            free(file_path);
+            free(link_path);
+        }
         bf_id++;
         if (bf_id == FILES_IN_BLOCK)
         {
@@ -502,7 +511,7 @@ int mkfs(char *path)
     return umap_fs();
 }
 
-int create_file(char *path_arg)
+int create(char *path_arg, int type)
 {
     int err = check_mount();
     if (err)
@@ -513,8 +522,8 @@ int create_file(char *path_arg)
         free(path);
         return STATUS_EXISTS_ERR;
     }
-    descr_struct *file = find_descr();
-    if (file == NULL)
+    descr_struct *cr = find_descr();
+    if (cr == NULL)
     {
         free(path);
         return STATUS_MAX_FILES_REACHED;
@@ -529,18 +538,36 @@ int create_file(char *path_arg)
         return STATUS_NO_SPACE_LEFT;
     }
 
-    file->type = FILE_TYPE;
-    file->links_num = 1;
-    file->size = 0;
-    file->blocks_id = block_num;
+    cr->type = type;
+    cr->links_num = 1;
+    cr->size = 0;
+    cr->blocks_id = block_num;
 
     char *filename = get_filename(path);
     char *dir_path = get_dir_path(path);
     descr_struct *dir = lookup(dir_path);
     free(dir_path);
-    err = add_to_dir(dir, file, filename);
+    err = add_to_dir(dir, cr, filename);
     free(path);
-    return err;
+
+    if (err)
+        return err;
+
+    if (type == DIR_TYPE)
+    {
+        err = add_to_dir(cr, cr, ".");
+        if (err)
+            return err;
+
+        return add_to_dir(cr, dir, "..");
+    } else {
+        return STATUS_OK;
+    }
+}
+
+int create_file(char *path_arg)
+{
+    return create(path_arg, FILE_TYPE);
 }
 
 
@@ -622,7 +649,7 @@ int rmlink(char *path_arg)
         free(path);
         return STATUS_NOT_FOUND;
     }
-    if (file->type != FILE_TYPE)
+    if (file->type != FILE_TYPE && file->type != LINK_TYPE)
     {
         free(path);
         return STATUS_NOT_FILE;
@@ -650,7 +677,7 @@ int open_file(char *path_arg)
     free(path);
     if (file == NULL)
         return -1;
-    if (file->type != FILE_TYPE)
+    if (file->type != FILE_TYPE && file->type != LINK_TYPE)
         return -1;
 
     return create_fid(file);
@@ -667,7 +694,7 @@ int read_file(int fid, int offset, int size, char *data)
     if (err)
         return err;
     descr_struct *file = DESCR_TABLE + FIDS[fid];
-    if (file->type != FILE_TYPE)
+    if (file->type != FILE_TYPE && file->type != LINK_TYPE)
         return STATUS_NOT_FILE;
     if (offset + size > file->size)
         return STATUS_SIZE_ERR;
@@ -695,7 +722,7 @@ int write_file(int fid, int offset, int size, char *data)
     if (err)
         return err;
     descr_struct *file = DESCR_TABLE + FIDS[fid];
-    if (file->type != FILE_TYPE)
+    if (file->type != FILE_TYPE && file->type != LINK_TYPE)
         return STATUS_NOT_FILE;
     if (offset > file->size)
         return STATUS_SIZE_ERR;
@@ -740,7 +767,7 @@ int trancate(char *path_arg, int new_size)
     free(path);
     if (file == NULL)
         return STATUS_NOT_FOUND;
-    if (file->type != FILE_TYPE)
+    if (file->type != FILE_TYPE && file->type != LINK_TYPE)
         return STATUS_NOT_FILE;
     int *blocks = BLOCKS(file->blocks_id);
     int old_blocks_num = BLOCKS_NUM(file);
@@ -767,51 +794,7 @@ int trancate(char *path_arg, int new_size)
 
 int make_dir(char *path_arg)
 {
-    int err = check_mount();
-    if (err)
-        return err;
-    char *path = abs_path(path_arg);
-    if (lookup(path) != NULL)
-    {
-        free(path);
-        return STATUS_EXISTS_ERR;
-    }
-    descr_struct *dir = find_descr();
-    if (dir == NULL)
-    {
-        free(path);
-        return STATUS_MAX_FILES_REACHED;
-    }
-
-    int block_num = find_block();
-    mask_block(block_num);
-
-    if (block_num == -1)
-    {
-        free(path);
-        return STATUS_NO_SPACE_LEFT;
-    }
-
-    dir->type = DIR_TYPE;
-    dir->links_num = 1;
-    dir->size = 0;
-    dir->blocks_id = block_num;
-
-    char *name = get_filename(path);
-    char *dir_path = get_dir_path(path);
-    descr_struct *parent_dir = lookup(dir_path);
-    free(dir_path);
-
-    err = add_to_dir(parent_dir, dir, name);
-    free(path);
-    if (err)
-        return err;
-
-    err = add_to_dir(dir, dir, ".");
-    if (err)
-        return err;
-
-    return add_to_dir(dir, parent_dir, "..");
+    return create(path_arg, DIR_TYPE);
 }
 
 char *pwd()
@@ -946,4 +929,27 @@ char *abs_path(char *path_arg)
     char *packed = pack_path(a_path);
     free(a_path);
     return packed;
+}
+
+int mksymlink(char *from_arg, char *to_arg)
+{
+    char *from = abs_path(from_arg);
+    if (lookup(from) == NULL)
+    {
+        free(from);
+        return STATUS_NOT_FOUND;
+    }
+    char *to = abs_path(to_arg);
+    int err = create(to, LINK_TYPE);
+    if (err)
+    {
+        free(to);
+        return err;
+    }
+    int fid = open_file(to);
+    err = write_file(fid, 0, strlen(from), from);
+    close_file(fid);
+    free(to);
+    free(from);
+    return err;
 }
