@@ -543,6 +543,8 @@ int com_cd(char *path)
 /* The user wishes to quit using this program. Just set DONE non-zero. */
 int com_quit(char *arg)
 {
+    if (is_mount())
+        umount();
     return EXIT_CODE;
 }
 
