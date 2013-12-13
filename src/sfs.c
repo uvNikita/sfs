@@ -59,6 +59,9 @@ char WORK_DIR[MAX_PATH_SIZE];
 int map_fs(char *path);
 int umap_fs();
 int check_mount();
+descr_struct *lookup_link(char *path);
+descr_struct *lookup_full(char *path);
+char *read_symlink(descr_struct *link);
 
 
 int mount(char *path)
@@ -213,7 +216,7 @@ char *get_dir_path(char *path)
     return dir_path;
 }
 
-descr_struct *lookup(char *path)
+descr_struct *lookup(char *path, bool follow_symlinks)
 {
     if (strcmp(path, "/") == 0)
     {
@@ -221,7 +224,7 @@ descr_struct *lookup(char *path)
     }
     char *filename = get_filename(path);
     char *dir_path = get_dir_path(path);
-    descr_struct *dir = lookup(dir_path);
+    descr_struct *dir = lookup_full(dir_path);
     free(dir_path);
     if (dir == NULL)
         return NULL;
@@ -234,7 +237,14 @@ descr_struct *lookup(char *path)
         file_struct *file = files + bf_id;
         if(strcmp(file->filename, filename) == 0)
         {
-            return DESCR_TABLE + file->descr_id;
+            descr_struct *file_descr = DESCR_TABLE + file->descr_id;
+            if (follow_symlinks && file_descr->type == LINK_TYPE)
+            {
+                char *link_path = read_symlink(file_descr);
+                return lookup_full(link_path);
+            } else {
+                return file_descr;
+            }
         }
         bf_id++;
         if (bf_id == FILES_IN_BLOCK)
@@ -246,6 +256,16 @@ descr_struct *lookup(char *path)
     }
     return NULL;
 
+}
+
+descr_struct *lookup_link(char *path)
+{
+    return lookup(path, false);
+}
+
+descr_struct *lookup_full(char *path)
+{
+    return lookup(path, true);
 }
 
 int add_to_dir(descr_struct *dir, descr_struct *file, char *filename)
@@ -380,7 +400,7 @@ int list(char *path_arg)
         return err;
 
     char *path = abs_path(path_arg);
-    descr_struct *dir = lookup(path);
+    descr_struct *dir = lookup_full(path);
     if (dir == NULL)
     {
         free(path);
@@ -407,15 +427,8 @@ int list(char *path_arg)
             printf( "%s/ \t\t id:%d\n", file->filename, file->descr_id);
         if (file_descr->type == LINK_TYPE)
         {
-            char *file_path = malloc(strlen(path) + strlen(file->filename));
-            strcpy(file_path, path);
-            strcat(file_path, file->filename);
-            int fid = open_file(file_path);
-            char *link_path = malloc(file_descr->size);
-            read_file(fid, 0, file_descr->size, link_path);
-            close_file(fid);
+            char *link_path = read_symlink(file_descr);
             printf("%s@ -> %s \t id:%d\n", file->filename, link_path, file->descr_id);
-            free(file_path);
             free(link_path);
         }
         bf_id++;
@@ -517,7 +530,7 @@ int create(char *path_arg, int type)
     if (err)
         return err;
     char *path = abs_path(path_arg);
-    if (lookup(path) != NULL)
+    if (lookup_full(path) != NULL)
     {
         free(path);
         return STATUS_EXISTS_ERR;
@@ -545,7 +558,7 @@ int create(char *path_arg, int type)
 
     char *filename = get_filename(path);
     char *dir_path = get_dir_path(path);
-    descr_struct *dir = lookup(dir_path);
+    descr_struct *dir = lookup_full(dir_path);
     free(dir_path);
     err = add_to_dir(dir, cr, filename);
     free(path);
@@ -615,14 +628,14 @@ int filestat(int descr_id)
 int mklink(char *from_arg, char *to_arg)
 {
     char *from = abs_path(from_arg);
-    descr_struct *from_file = lookup(from);
+    descr_struct *from_file = lookup_full(from);
     free(from);
     if (from_file == NULL)
         return STATUS_NOT_FOUND;
     char *to = abs_path(to_arg);
     char *dir_path = get_dir_path(to);
     char *filename = get_filename(to);
-    descr_struct *to_dir = lookup(dir_path);
+    descr_struct *to_dir = lookup_full(dir_path);
     free(dir_path);
     if (to_dir == NULL)
     {
@@ -643,20 +656,20 @@ int mklink(char *from_arg, char *to_arg)
 int rmlink(char *path_arg)
 {
     char *path = abs_path(path_arg);
-    descr_struct *file = lookup(path);
+    descr_struct *file = lookup_link(path);
     if (file == NULL)
     {
         free(path);
         return STATUS_NOT_FOUND;
     }
-    if (file->type != FILE_TYPE && file->type != LINK_TYPE)
-    {
-        free(path);
-        return STATUS_NOT_FILE;
-    }
+    // if (file->type != FILE_TYPE && file->type != LINK_TYPE)
+    // {
+    //     free(path);
+    //     return STATUS_NOT_FILE;
+    // }
     char *filename = get_filename(path);
     char *dir_path = get_dir_path(path);
-    descr_struct *dir = lookup(dir_path);
+    descr_struct *dir = lookup_full(dir_path);
     free(dir_path);
     if (dir == NULL)
         return STATUS_NOT_FOUND;
@@ -673,7 +686,7 @@ int rmlink(char *path_arg)
 int open_file(char *path_arg)
 {
     char *path = abs_path(path_arg);
-    descr_struct *file = lookup(path);
+    descr_struct *file = lookup_full(path);
     free(path);
     if (file == NULL)
         return -1;
@@ -763,7 +776,7 @@ int write_file(int fid, int offset, int size, char *data)
 int trancate(char *path_arg, int new_size)
 {
     char *path = abs_path(path_arg);
-    descr_struct *file = lookup(path);
+    descr_struct *file = lookup_full(path);
     free(path);
     if (file == NULL)
         return STATUS_NOT_FOUND;
@@ -811,7 +824,7 @@ int cd(char *path_arg)
     if (err)
         return err;
     char *path = abs_path(path_arg);
-    descr_struct *dir = lookup(path);
+    descr_struct *dir = lookup_full(path);
     if (dir == NULL)
     {
         free(path);
@@ -836,7 +849,7 @@ int is_mount()
 int remove_dir(char *path_arg)
 {
     char *path = abs_path(path_arg);
-    descr_struct *dir = lookup(path);
+    descr_struct *dir = lookup_full(path);
     if (dir == NULL)
     {
         free(path);
@@ -849,7 +862,7 @@ int remove_dir(char *path_arg)
     }
     char *name = get_filename(path);
     char *dir_path = get_dir_path(path);
-    descr_struct *parent_dir = lookup(dir_path);
+    descr_struct *parent_dir = lookup_full(dir_path);
     free(dir_path);
     if (parent_dir == NULL)
     {
@@ -934,7 +947,7 @@ char *abs_path(char *path_arg)
 int mksymlink(char *from_arg, char *to_arg)
 {
     char *from = abs_path(from_arg);
-    if (lookup(from) == NULL)
+    if (lookup_full(from) == NULL)
     {
         free(from);
         return STATUS_NOT_FOUND;
@@ -946,9 +959,10 @@ int mksymlink(char *from_arg, char *to_arg)
         free(to);
         return err;
     }
-    int fid = open_file(to);
+    descr_struct *link = lookup_link(to);
+    int fid = create_fid(link);
     err = write_file(fid, 0, strlen(from), from);
-    close_file(fid);
+    rm_fid(fid);
     free(to);
     free(from);
     return err;
@@ -957,9 +971,19 @@ int mksymlink(char *from_arg, char *to_arg)
 int get_file_size(char *path_arg)
 {
     char *path = abs_path(path_arg);
-    descr_struct *file = lookup(path);
+    descr_struct *file = lookup_full(path);
     free(path);
     if (file == NULL)
         return -1;
     return file->size;
+}
+
+char *read_symlink(descr_struct *link)
+{
+    int fid = create_fid(link);
+    char *data = malloc(link->size + 1);
+    read_file(fid, 0, link->size, data);
+    data[link->size] = '\0';
+    rm_fid(fid);
+    return data;
 }

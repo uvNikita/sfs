@@ -491,7 +491,8 @@ int com_cat(char *path)
         return STATUS_ERR;
     }
     int size = get_file_size(path);
-    char *data = malloc(size);
+    char *data = malloc(size + 1);
+    data[size] = '\0';
     int err = read_file(fid, 0, size, data);
     close_file(fid);
     if (err == STATUS_NOT_FOUND)
